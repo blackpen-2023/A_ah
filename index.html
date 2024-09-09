@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="kr">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HM-10 Bluetooth Communication</title>
+</head>
+<body>
+    <h1>HM-10 Bluetooth Communication</h1>
+    <button id="connectButton">Connect to HM-10</button>
+    <button id="sendOneButton" disabled>Send 1</button>
+    <button id="sendTwoButton" disabled>Send 2</button>
+    <p id="status">Status: Disconnected</p>
+    <p id="receivedData">Received Data: </p>
+
+    <script>
+        let device;
+        let characteristic;
+
+        document.getElementById('connectButton').addEventListener('click', async () => {
+            try {
+                // HM-10 장치 선택 및 연결 설정
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: ['ffe0'] }] // HM-10의 기본 서비스 UUID
+                });
+
+                document.getElementById('status').textContent = `Status: Connecting to ${device.name}`;
+
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService('ffe0'); // HM-10 기본 서비스 UUID
+                characteristic = await service.getCharacteristic('ffe1'); // HM-10 기본 특성 UUID
+
+                document.getElementById('status').textContent = 'Status: Connected';
+
+                // 데이터 수신 설정
+                await characteristic.startNotifications();
+                characteristic.addEventListener('characteristicvaluechanged', handleData);
+
+                // 버튼 활성화
+                document.getElementById('sendOneButton').disabled = false;
+                document.getElementById('sendTwoButton').disabled = false;
+
+            } catch (error) {
+                console.error('Connection failed:', error);
+                document.getElementById('status').textContent = 'Status: Connection failed';
+            }
+        });
+
+        // HM-10 모듈에서 수신된 데이터 처리
+        function handleData(event) {
+            const value = event.target.value;
+            const decoder = new TextDecoder('utf-8');
+            const data = decoder.decode(value); // 수신된 데이터를 텍스트로 변환
+            document.getElementById('receivedData').textContent = `Received Data: ${data}`;
+        }
+
+        // 1을 HM-10 모듈로 전송하는 함수
+        document.getElementById('sendOneButton').addEventListener('click', async () => {
+            if (characteristic) {
+                const encoder = new TextEncoder('utf-8');
+                await characteristic.writeValue(encoder.encode('1'));
+                console.log('Sent 1 to HM-10');
+            }
+        });
+
+        // 2를 HM-10 모듈로 전송하는 함수
+        document.getElementById('sendTwoButton').addEventListener('click', async () => {
+            if (characteristic) {
+                const encoder = new TextEncoder('utf-8');
+                await characteristic.writeValue(encoder.encode('2'));
+                console.log('Sent 2 to HM-10');
+            }
+        });
+    </script>
+</body>
+</html>
