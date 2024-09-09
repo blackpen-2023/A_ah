@@ -20,27 +20,33 @@
 
         document.getElementById('connectButton').addEventListener('click', async () => {
             try {
-                // HM-10 장치 선택 및 연결 설정
+                console.log('Attempting to connect to HM-10...'); // 연결 시도 로그
+        
+                // 블루투스 장치 요청
                 device = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: ['ffe0'] }] // HM-10의 기본 서비스 UUID
+                    acceptAllDevices: true // 모든 BLE 장치 검색
                 });
-
-                document.getElementById('status').textContent = `Status: Connecting to ${device.name}`;
-
+        
+                console.log(`Device selected: ${device.name}`); // 장치 선택 확인 로그
+        
                 const server = await device.gatt.connect();
-                const service = await server.getPrimaryService('ffe0'); // HM-10 기본 서비스 UUID
-                characteristic = await service.getCharacteristic('ffe1'); // HM-10 기본 특성 UUID
-
+                console.log('Connected to GATT server'); // GATT 서버 연결 확인 로그
+        
+                const service = await server.getPrimaryService('ffe0');
+                characteristic = await service.getCharacteristic('ffe1');
+        
+                console.log('Service and characteristic found'); // 서비스 및 특성 찾기 로그
+        
                 document.getElementById('status').textContent = 'Status: Connected';
-
+        
                 // 데이터 수신 설정
                 await characteristic.startNotifications();
                 characteristic.addEventListener('characteristicvaluechanged', handleData);
-
+        
                 // 버튼 활성화
                 document.getElementById('sendOneButton').disabled = false;
                 document.getElementById('sendTwoButton').disabled = false;
-
+        
             } catch (error) {
                 console.error('Connection failed:', error);
                 document.getElementById('status').textContent = 'Status: Connection failed';
