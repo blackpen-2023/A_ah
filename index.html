@@ -4,52 +4,155 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HM-10 Bluetooth Communication</title>
+    <title>A ah | TEST Ver</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .button-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        #connectButton {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        #connectButton:hover {
+            background-color: #45a049;
+        }
+
+        #sendOneButton, #sendTwoButton {
+            background-color: #007bff;
+            color: white;
+        }
+
+        #sendOneButton:hover, #sendTwoButton:hover {
+            background-color: #0056b3;
+        }
+
+        #clearDataButton {
+            background-color: #ff4d4d;
+            color: white;
+        }
+
+        #clearDataButton:hover {
+            background-color: #cc0000;
+        }
+
+        #status {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #666;
+        }
+
+        #receivedData {
+            margin-top: 20px;
+            width: 90%;
+            max-width: 600px;
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+            max-height: 300px;
+            white-space: pre-wrap; /* Preserve formatting with line breaks */
+        }
+
+        #dataContainer {
+            padding: 8px;
+            font-size: 14px;
+            word-break: keep-all; /* 단어 단위로 줄바꿈 방지 */
+            white-space: pre; /* 줄바꿈 없이 그대로 표시 */
+            overflow-x: auto; /* 내용이 길면 가로 스크롤 생성 */
+        }
+        
+        .loading {
+            font-style: italic;
+            color: #888;
+        }
+    </style>
 </head>
 <body>
-    <h1>HM-10 Bluetooth Communication</h1>
-    <button id="connectButton">Connect to HM-10</button>
-    <button id="sendOneButton" disabled>Send 1</button>
-    <button id="sendTwoButton" disabled>Send 2</button>
-    <p id="status">Status: Disconnected</p>
-    <p id="receivedData">Received Data: </p>
+    <h1>Alcohol Alert Helper - ‘Aah!’</h1>
+    <div class="button-container">
+        <button id="connectButton">기기연결</button>
+        <button id="sendOneButton" disabled>바로측정</button>
+        <button id="sendTwoButton" disabled>정밀측정</button>
+        <button id="clearDataButton">터미널 초기화</button>
+    </div>
+    <p id="status">연결상태 : Disconnected</p>
+    <div id="receivedData">
+        <h3>Terminal</h3>
+        <div id="dataContainer" class="data-entry"></div>
+    </div>
+    <center>
+        <p style="color: #888;"><a href="https://blackpen.site">BLACKPEN</a> All rights reserved. 2024</p>
+    </center>
 
     <script>
         let device;
         let characteristic;
+        let receivedText = ""; // 전체 수신된 텍스트를 저장하는 변수
+        let loadingInterval;
 
         document.getElementById('connectButton').addEventListener('click', async () => {
             try {
                 console.log('Attempting to connect to HM-10...'); // 연결 시도 로그
-        
+                
                 // 블루투스 장치 요청
                 device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true // 모든 BLE 장치 검색
+                    acceptAllDevices: true, // 모든 BLE 장치 검색
+                    optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb'] // 올바른 형식의 서비스 UUID
                 });
-        
+
                 console.log(`Device selected: ${device.name}`); // 장치 선택 확인 로그
-        
+
                 const server = await device.gatt.connect();
                 console.log('Connected to GATT server'); // GATT 서버 연결 확인 로그
-        
-                const service = await server.getPrimaryService('ffe0');
-                characteristic = await service.getCharacteristic('ffe1');
-        
-                console.log('Service and characteristic found'); // 서비스 및 특성 찾기 로그
-        
-                document.getElementById('status').textContent = 'Status: Connected';
-        
+
+                const service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
+                console.log('Primary service found'); // 서비스 찾기 로그
+
+                characteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
+                console.log('Characteristic found'); // 특성 찾기 로그
+
+                document.getElementById('status').textContent = '연결상태 : Connected';
+
                 // 데이터 수신 설정
                 await characteristic.startNotifications();
                 characteristic.addEventListener('characteristicvaluechanged', handleData);
-        
+
                 // 버튼 활성화
                 document.getElementById('sendOneButton').disabled = false;
                 document.getElementById('sendTwoButton').disabled = false;
-        
+
             } catch (error) {
                 console.error('Connection failed:', error);
-                document.getElementById('status').textContent = 'Status: Connection failed';
+                document.getElementById('status').textContent = `Status: Connection failed: ${error.message}`;
             }
         });
 
@@ -58,12 +161,34 @@
             const value = event.target.value;
             const decoder = new TextDecoder('utf-8');
             const data = decoder.decode(value); // 수신된 데이터를 텍스트로 변환
-            document.getElementById('receivedData').textContent = `Received Data: ${data}`;
+            
+            // 수신된 데이터를 출력 형식에 맞게 업데이트
+            receivedText += `>> ${data.replace(/(\r\n|\n|\r)/gm, "")}\n`; // 줄바꿈 문자 제거 후 추가
+            document.getElementById('dataContainer').textContent = receivedText;
+            stopLoading(); // 로딩 중 메시지 중지
+        }
+
+        // 로딩 중 메시지 표시 함수
+        function startLoading() {
+            let dots = 0;
+            const loadingText = document.getElementById('status');
+            loadingText.textContent = '로딩중';
+            loadingInterval = setInterval(() => {
+                dots = (dots + 1) % 4; // 0, 1, 2, 3으로 반복
+                loadingText.textContent = '로딩중' + '.'.repeat(dots);
+            }, 500);
+        }
+
+        // 로딩 중 메시지 중지 함수
+        function stopLoading() {
+            clearInterval(loadingInterval);
+            document.getElementById('status').textContent = 'Status: Connected';
         }
 
         // 1을 HM-10 모듈로 전송하는 함수
         document.getElementById('sendOneButton').addEventListener('click', async () => {
             if (characteristic) {
+                startLoading();
                 const encoder = new TextEncoder('utf-8');
                 await characteristic.writeValue(encoder.encode('1'));
                 console.log('Sent 1 to HM-10');
@@ -73,10 +198,17 @@
         // 2를 HM-10 모듈로 전송하는 함수
         document.getElementById('sendTwoButton').addEventListener('click', async () => {
             if (characteristic) {
+                startLoading();
                 const encoder = new TextEncoder('utf-8');
                 await characteristic.writeValue(encoder.encode('2'));
                 console.log('Sent 2 to HM-10');
             }
+        });
+
+        // 기록을 지우는 함수
+        document.getElementById('clearDataButton').addEventListener('click', () => {
+            receivedText = ""; // 저장된 텍스트 초기화
+            document.getElementById('dataContainer').textContent = ''; // 기록 초기화
         });
     </script>
 </body>
